@@ -125,12 +125,12 @@ sudo systemctl enable docker
 🧪 **Step 3 — Test installation**
 * Check version  ---> Docker CLI is installed and working
 ```bash
-~$ docker --version
+docker --version
 ```
 ![docker version]()
 * check Docker's info 
 ```bash 
-~$ docker info
+docker info
 ```
 
 * Hello world Test ---> Docker daemon is working and containers run correctly
@@ -150,14 +150,13 @@ sudo usermod -aG docker $USER
 ```
 and `exit` ssh connection, and `restart` the VM.
 
-
 ---
 
 ## 🪜 STEP 1 — Project structure
 
 Create:
-
-Makefile
+```
+Makefile  
 srcs/
   docker-compose.yml
   .env
@@ -165,11 +164,251 @@ srcs/
     nginx/
     wordpress/
     mariadb/
+```
+**Use:**
+```bash
+mkdir -p ~/Inception/srcs
+mkdir -p ~/Inception/srcs/requirements/mariadb/{conf,tools}
+mkdir -p ~/Inception/srcs/requirements/nginx/{conf,tools}
+mkdir -p ~/Inception/srcs/requirements/wordpress/{conf,tools}
+mkdir -p ~/Inception/srcs/requirements/tools
+touch ~/Inception/Makefile
+touch ~/Inception/srcs/docker-compose.yml
+touch ~/Inception/srcs/.env
+```
+
+Then check it:
+```bash
+tree ~/Inception
+# or, if tree is not installed:
+find ~/Inception -type d -o -type f | sort
+```
+
+Because the subject says the named volumes must store data inside: `/home/login/data`, create them:
+
+```bash
+mkdir -p /home/mcalciat/data/mysql
+mkdir -p /home/mcalciat/data/wordpress
+```
+
+---
 
 🪜 STEP 2 — Build MariaDB container
-Write Dockerfile
-Configure database
-Add user + DB
+Recap on the subject’s mandatory rules:
+```
+[a] one dedicated container for MariaDB
+[b] built from your own Dockerfile
+[c] no ready-made MariaDB image
+[d] database data persisted in a named volume
+[e] credentials passed through environment variables, not hardcoded in Dockerfile
+```
+
+Create 3 files for MariaDB:
+```bash
+touch srcs/requirements/mariadb/Dockerfile
+touch srcs/requirements/mariadb/conf/50-server.cnf
+touch srcs/requirements/mariadb/tools/setup.sh
+chmod +x srcs/requirements/mariadb/tools/setup.sh
+```
+1. Write Dockerfile
+```bash
+FROM debian:bookworm
+
+RUN apt-get update && apt-get install -y mariadb-server && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY conf/50-server.cnf /etc/mysql/mariadb.conf.d/50-server.cnf
+COPY tools/setup.sh /usr/local/bin/setup.sh
+
+RUN chmod +x /usr/local/bin/setup.sh
+
+EXPOSE 3306
+
+ENTRYPOINT ["/usr/local/bin/setup.sh"]
+```
+
+2. Configure database
+```bash
+[mysqld]
+bind-address = 0.0.0.0
+port = 3306
+datadir = /var/lib/mysql
+socket = /run/mysqld/mysqld.sock
+pid-file = /run/mysqld/mysqld.pid
+```
+
+`bind-address = 0.0.0.0` allows **MariaDB** to accept connections from the **WordPress** container through the Docker network.  
+If it stayed only on localhost, WordPress would not be able to connect.  
+
+3. Write startup script: add user + DB
+Inside setup.sh there will a script in charge of launching, creating DB, sql user and password. The container keeps running with MariaDB as the main process.
+
+```bash
+#!/bin/bash
+set -e
+
+mkdir -p /run/mysqld
+chown -R mysql:mysql /run/mysqld
+chown -R mysql:mysql /var/lib/mysql
+
+if [ ! -f "/var/lib/mysql/.setup_done" ]; then
+    mariadb-install-db --user=mysql --datadir=/var/lib/mysql
+
+    mysqld_safe --datadir=/var/lib/mysql &
+    pid="$!"
+
+    until mariadb-admin ping >/dev/null 2>&1; do
+        sleep 1
+    done
+
+    mariadb -e "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;"
+    mariadb -e "CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';"
+    mariadb -e "GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';"
+    mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
+    mariadb -e "FLUSH PRIVILEGES;"
+
+    touch /var/lib/mysql/.setup_done
+
+    mariadb-admin -u root -p"${MYSQL_ROOT_PASSWORD}" shutdown
+    wait "$pid"
+fi
+
+exec mysqld_safe --datadir=/var/lib/mysql
+```
+These lines: 
+```bash
+mkdir -p /run/mysqld
+chown -R mysql:mysql /run/mysqld
+chown -R mysql:mysql /var/lib/mysql
+```
+help avoid startup errors related to:
+- missing socket directory  
+- wrong ownership on DB files  
+- MariaDB not being able to write its pid/socket
+
+These lines: `/var/lib/mysql/.setup_done` will:
+- first launch → create DB/user/passwords, then create marker
+- next launches → skip setup safely
+
+4. Include mariadb's setup script variables in `.env`
+MariaDB's setup.sh script expects the definition of those variables it uses.   
+These needs to placed in `.env` when we wire MariaDB into `docker-compose.yml`.
+Fill `.env` with these lines:
+```bash
+MYSQL_DATABASE=wordpress
+MYSQL_USER=wpuser
+MYSQL_PASSWORD=wp_pass_42
+MYSQL_ROOT_PASSWORD=root_pass_42
+
+MYSQL_VOLUME=/home/mcalciat/data/mysql
+WP_VOLUME=/home/mcalciat/data/wordpress
+DOMAIN_NAME=mcalciat.42.fr
+```
+
+Remember this : 
+> MYSQL_ROOT_PASSWORD=root_pass_42
+
+5. Write mariadb's docker compose info 
+Open the file
+```bash
+vim ~/Inception/srcs/docker-compose.yml
+```
+Include mariaDB verision:
+```yaml
+services:
+  mariadb:
+    container_name: mariadb
+    build: ./requirements/mariadb
+    image: mariadb
+    env_file:
+      - .env
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - inception
+    restart: always
+
+volumes:
+  mariadb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MYSQL_VOLUME}
+
+networks:
+  inception:
+    driver: bridge
+```
+
+This will **build the image** from the Dockerfile, **name the image mariadb** (which matches the service name), **load the .env** variables, **mounts the named volume** int mysql (where the data is stored). In case of crash, there are **instruction to restart**. 
+It also creates the `Docker network` that will connect mariadb to `WordPress` and `NGINX`.
+
+6. Test mariadb
+Use:
+```bash
+cd ~/Inception/srcs
+docker compose up --build
+```
+On first launch, MariaDB should:
+- build the image  
+- initialize the DB  
+- create the database  
+- create the SQL user  
+- stay running
+
+If you want to stop it, use:
+```bash
+docker compose down
+```
+If you want to stop and remove volumes too:
+```bash
+docker compose down -v
+```
+🚨🚨 Be careful:`-v` deletes persisted DB data.🚨🚨
+
+If asked `Watch` versus `Detach`, recommendation is `detach`, and it will run in the background. Choosing watch means you'll be watching logs in real time. The terminal is "blocked". That is useful only for debugging.
+
+In another terminal, do:
+```bash
+# to see it running
+docker ps
+# to see logs
+docker compose logs mariadb
+```
+
+7. Database validation
+Seeing logs prove the server is running, bit to actual confirm that the database was created, the SQL user was created and the root password was applied, do as follows:
+```bash
+docker exec -it mariadb bash
+```
+Then inside the container
+```
+mariadb -u root -p
+```
+Enter the root password from `.env`
+
+Then run:
+```bash
+SHOW DATABASES;
+# check the custom database exists
+SELECT User, Host FROM mysql.user;
+# checks the custom user exists
+```
+
+![mariadb test](pics/mariadb_test.png)
+To exit, just type `exit` twice.
+
+
+If you need to RE test because you found an error:
+```bash
+docker compose down -v
+sudo rm -rf /home/mcalciat/data/mysql/*
+```
+Because your current MariaDB volume already contains partially initialized data, you should reset it before retesting. Otherwise the old state may remain.  
+
+---
+
 🪜 STEP 3 — Build WordPress container
 Install:
 PHP
@@ -189,6 +428,10 @@ Map to:
 Connect all containers
 Define network
 Define volumes
+
+
+
+
 🪜 STEP 7 — Domain setup
 
 Edit /etc/hosts:

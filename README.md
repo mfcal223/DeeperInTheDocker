@@ -10,11 +10,11 @@ Docker is an open-source platform that uses `OS-level virtualization` to deliver
 Docker uses a `client-server architecture`. The Docker client talks to the Docker daemon, which does the heavy lifting of building, running, and distributing your Docker containers. The Docker client and daemon can run on the same system, or you can connect a Docker client to a remote Docker daemon.(1)
 
 ### Advatanges of Docker:
-Portability: Runs anywhere in local machine, cloud, on‑prem servers.
-Consistency: Same behavior in development, testing, and production.
-Lightweight: No full OS per app; containers share the host kernel.
-Scalability: Ideal for microservices and orchestrators like Kubernetes and Docker Swarm.
-Efficiency: Starts in seconds, uses fewer system resources.
+* `Portability`: Runs anywhere in local machine, cloud, on‑prem servers.  
+* `Consistency`: Same behavior in development, testing, and production.  
+* `Lightweight`: No full OS per app; containers share the host kernel.  
+* `Scalability`: Ideal for microservices and orchestrators like Kubernetes and Docker Swarm.  
+* `Efficiency`: Starts in seconds, uses fewer system resources.  
 
 ---
 
