@@ -127,11 +127,13 @@ sudo systemctl enable docker
 ```bash
 docker --version
 ```
-![docker version]()
+![docker version](pics/docker_version.png)
 * check Docker's info 
 ```bash 
 docker info
 ```
+![docker info](pics/docker_info.png)
+
 
 * Hello world Test ---> Docker daemon is working and containers run correctly
 ```bash
@@ -193,7 +195,7 @@ mkdir -p /home/mcalciat/data/wordpress
 
 ---
 
-🪜 STEP 2 — Build MariaDB container
+## 🪜 STEP 2 — Build MariaDB container
 Recap on the subject’s mandatory rules:
 ```
 [a] one dedicated container for MariaDB
@@ -251,29 +253,33 @@ mkdir -p /run/mysqld
 chown -R mysql:mysql /run/mysqld
 chown -R mysql:mysql /var/lib/mysql
 
-if [ ! -f "/var/lib/mysql/.setup_done" ]; then
+if [ ! -d "/var/lib/mysql/mysql" ]; then
     mariadb-install-db --user=mysql --datadir=/var/lib/mysql
+fi
 
-    mysqld_safe --datadir=/var/lib/mysql &
+if [ ! -f "/var/lib/mysql/.setup_done" ]; then
+    mariadbd --user=mysql --datadir=/var/lib/mysql --socket=/run/mysqld/mysqld.sock --pid-file=/run/mysqld/mysqld.pid --skip-networking &
     pid="$!"
 
-    until mariadb-admin ping >/dev/null 2>&1; do
+    until mariadb --protocol=socket -u root -e "SELECT 1;" >/dev/null 2>&1; do
         sleep 1
     done
 
-    mariadb -e "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;"
-    mariadb -e "CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';"
-    mariadb -e "GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';"
-    mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
-    mariadb -e "FLUSH PRIVILEGES;"
+    mariadb --protocol=socket -u root << EOF
+CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;
+CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
+GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+FLUSH PRIVILEGES;
+EOF
 
     touch /var/lib/mysql/.setup_done
 
-    mariadb-admin -u root -p"${MYSQL_ROOT_PASSWORD}" shutdown
+    mariadb-admin --protocol=socket -u root -p"${MYSQL_ROOT_PASSWORD}" shutdown
     wait "$pid"
 fi
 
-exec mysqld_safe --datadir=/var/lib/mysql
+exec mariadbd --user=mysql --datadir=/var/lib/mysql --socket=/run/mysqld/mysqld.sock --pid-file=/run/mysqld/mysqld.pid
 ```
 These lines: 
 ```bash
@@ -394,27 +400,72 @@ SHOW DATABASES;
 # check the custom database exists
 SELECT User, Host FROM mysql.user;
 # checks the custom user exists
+SELECT User, Host, plugin FROM mysql.user;
+# shows how each user authenticates to MariaDB
 ```
 
 ![mariadb test](pics/mariadb_test.png)
 To exit, just type `exit` twice.
 
+`plugin` check is done to verify that MariaDB users use **password-based authentication (mysql_native_password) instead of socket-based authentication**, which would prevent WordPress from connecting through the Docker network.
 
-If you need to RE test because you found an error:
 ```bash
-docker compose down -v
-sudo rm -rf /home/mcalciat/data/mysql/*
+root   | localhost | mysql_native_password
+wpuser | %         | mysql_native_password
 ```
-Because your current MariaDB volume already contains partially initialized data, you should reset it before retesting. Otherwise the old state may remain.  
+- root uses password → OK ✅  
+- wpuser uses password → OK ✅  
+- wpuser can connect from anywhere → OK ✅  
+
+8. Exit Maria DB  
+⛔️ To **exit** MariaDB, just type `exit` twice.   
+Once to exit MariaDB itself, and 2nd time to exit root.
+
+### 🧼 Reset & re-testing
+If you need to `RE test` because you found an error, do a **full reset** because the current `MariaDB volume` already contains partially initialized data. It should be reseted before retesting, or the old state may remain. 
+```bash
+cd ~/Inception/srcs
+docker compose down -v
+sudo rm -rf /home/mcalciat/data/mysql
+mkdir -p /home/mcalciat/data/mysql
+```
+ Then rebuild:
+```
+docker compose up --build
+```
+
+### 📯 Recap of Step-2
+If all went well, MariaDB step is now working correctly:
+* container runs         
+* custom DB created      
+* custom SQL user created 
+* root configured         
+* mariaDB files were created: Dockerfile, config, init script.
+* docker compose file was created
+* volumen mount and DB/user validation
+
+Make a BACKUP copy of these files:
+```bash
+srcs/requirements/mariadb/Dockerfile
+srcs/requirements/mariadb/conf/50-server.cnf
+srcs/requirements/mariadb/tools/setup.sh
+srcs/docker-compose.yml
+srcs/.env
+```
 
 ---
 
-🪜 STEP 3 — Build WordPress container
+## 🪜 STEP 3 — Build WordPress container
 Install:
-PHP
-php-fpm
-WordPress
-Connect to MariaDB
+* PHP  
+* php-fpm  
+* WordPress 
+* Connect to MariaDB
+
+
+
+
+---
 🪜 STEP 4 — Build NGINX container
 Configure HTTPS
 Reverse proxy to WordPress
