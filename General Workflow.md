@@ -456,19 +456,563 @@ srcs/.env
 ---
 
 ## 🪜 STEP 3 — Build WordPress container
-Install:
-* PHP  
-* php-fpm  
-* WordPress 
-* Connect to MariaDB
 
+🎯 Goal recap:
+* installing php-fpm  (❌ no nginx)
+* downloading/configuring WordPress  
+* connecting WordPress to MariaDB using:  
+      * database name: wordpress  
+      * user: wpuser  
+      * host: mariadb  
+* mounting the WordPress files volume
+* communicate through Docker network
+
+### 🧱 1. Create files
+```bash
+cd ~/Inception/srcs/requirements/wordpress
+
+touch Dockerfile
+mkdir -p tools
+touch tools/setup.sh
+chmod +x tools/setup.sh
+```
+
+### 🐳 2. Dockerfile
+```Dockerfile
+FROM debian:bookworm
+
+RUN apt-get update && apt-get install -y \
+    php \
+    php-fpm \
+    php-mysql \
+    curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY tools/setup.sh /usr/local/bin/setup.sh
+
+RUN chmod +x /usr/local/bin/setup.sh
+
+EXPOSE 9000
+
+ENTRYPOINT ["/usr/local/bin/setup.sh"]
+```
+
+`RUN` is installing or updating:  
+* `php-fpm` → runs PHP server (NGINX will connect later)
+* `php-mysql` → allows WordPress ↔ MariaDB communication
+* `curl` → to download WordPress
+
+Then it copies the setup script and makes that script executable (avoid permission errors).
+
+It sets port 9000 (typically php-fpm for WordPress) as the port the container will listen (metadata for container-to-container communication patterns). 
+Finally it sets the main startup command of the container: the script that will run everytime the container starts.
+
+
+### ⚙️ 3. WordPress setup script
+
+tools/setup.sh
+```bash
+#!/bin/bash
+set -e
+
+# Create directory
+mkdir -p /var/www/html
+cd /var/www/html
+
+# Download WordPress (only first time)
+if [ ! -f wp-config.php ]; then
+    curl -O https://wordpress.org/latest.tar.gz
+    tar -xzf latest.tar.gz
+    mv wordpress/* .
+    rm -rf wordpress latest.tar.gz
+
+    # Configure wp-config.php
+    cp wp-config-sample.php wp-config.php
+
+    sed -i "s/database_name_here/${MYSQL_DATABASE}/" wp-config.php
+    sed -i "s/username_here/${MYSQL_USER}/" wp-config.php
+    sed -i "s/password_here/${MYSQL_PASSWORD}/" wp-config.php
+    sed -i "s/localhost/mariadb/" wp-config.php
+fi
+
+# Configure PHP-FPM to listen on all interfaces
+sed -i 's|listen = /run/php/php7.4-fpm.sock|listen = 9000|' /etc/php/*/fpm/pool.d/www.conf
+
+# Run php-fpm in foreground (IMPORTANT for Docker)
+exec php-fpm -F
+```
+
+🧠 Key Concepts (VERY IMPORTANT)
+🔗 1. Database connection
+```
+define('DB_HOST', 'mariadb');
+```
+
+👉 This is NOT localhost
+👉 This is the container name (Docker DNS)
+
+💾 2. Volume usage
+WordPress files live in:
+```
+/var/www/html
+```
+
+👉 This must be mounted to:
+```
+/home/<login>/data/wordpress
+```
+🌐 3. php-fpm (port 9000)
+WordPress does NOT serve HTTP
+It only processes PHP
+NGINX will connect to: `wordpress:9000`
+
+### 🧩 4. docker-compose (WordPress part)
+Modify the docker-compose file to look like this:  
+```yaml
+services:
+  mariadb:
+    container_name: mariadb
+    build: ./requirements/mariadb
+    image: mariadb
+    env_file:
+      - .env
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - inception
+    restart: always
+
+  wordpress:
+    container_name: wordpress
+    build: ./requirements/wordpress
+    image: wordpress
+    env_file:
+      - .env
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      - mariadb
+    networks:
+      - inception
+    restart: always
+
+volumes:
+  mariadb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MYSQL_VOLUME}
+
+  wordpress_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${WP_VOLUME}
+
+```
+
+### 💾 5. Verify .env 
+Check that it contains these lines: 
+```
+MYSQL_DATABASE=wordpress
+MYSQL_USER=wpuser
+MYSQL_PASSWORD=wp_pass_42
+
+WP_VOLUME=/home/mcalciat/data/wordpress
+```
+
+### 🧪 6. Test WordPress container
+```
+docker compose up --build
+```
+Then:
+```bash
+docker ps -a
+# List current containers
+docker compose logs wordpress
+# List logs. Sometimes there will be none and it's OK
+docker exec -it wordpress ps aux
+# list all running processes in the container
+```
+You can confirm WordPress(WP) files exists in the volume
+```bash
+ls -la /home/mcalciat/data/wordpress
+```
+you should see files like 
+```
+wp-config.php
+wp-admin
+wp-content
+wp-includes
+index.php
+```
+
+![wordpress files exist check](pics/wordpress_file_creation_check.png)
+
+Afterward you can check inside the WP container: 
+```bash
+docker exec -it wordpress bash
+#to enter it
+cd /var/www/html
+cat wp-config.php | grep DB_
+# Confirm wp-config.php contains the right DB values for the DB connection config
+getent hosts mariadb
+# test if WP can resolve the MariaDB container name
+```
+![WP config check](pics/wordpress_check_DB_connection_config.png)
+
+
+### 🚨 8. Common mistakes (you WILL hit these)
+
+| Issue   | Cause | Check:  |
+|---------|-------|-------------------|
+|WordPress cannot connect to DB | MariaDB not ready yet |  restart logic |
+|Blank page | php-fpm not running correctly |  **docker exec -it wordpress bash** + **ps aux** | **grep php-fpm** |
+| Files not persisting | volume not mounted correctly | **ls /home/mcalciat/data/wordpress** |.
+
+### 9. 🧠 Recap
+WordPress container:
+- stores files → volume
+- runs php-fpm → port 9000
+- connects to DB → mariadb container  
+
+If all went well, now WordPress container is correctly built and running, it is correctly connected to MariaDB, the volumes and network are working.
+NO HTTP & NO nginx here.
 
 
 
 ---
-🪜 STEP 4 — Build NGINX container
-Configure HTTPS
-Reverse proxy to WordPress
+
+## 🪜 STEP 4 — Build NGINX container
+This will add the only public entrypoint of the project:  
+1. NGINX  
+2. HTTPS only  
+3. TLS 1.2 / 1.3 only  
+4. reverse proxy / FastCGI to wordpress:9000  
+
+At the end of this step, the flow will be:
+```yaml
+Browser → NGINX:443 → WordPress:9000 → MariaDB:3306
+```
+
+1. Create the nginx files
+
+From your project root:
+
+mkdir -p ~/Inception/srcs/requirements/nginx/conf
+mkdir -p ~/Inception/srcs/requirements/nginx/tools
+
+touch ~/Inception/srcs/requirements/nginx/Dockerfile
+touch ~/Inception/srcs/requirements/nginx/conf/nginx.conf
+touch ~/Inception/srcs/requirements/nginx/tools/setup.sh
+
+chmod +x ~/Inception/srcs/requirements/nginx/tools/setup.sh
+2. NGINX Dockerfile
+
+Put this in:
+
+srcs/requirements/nginx/Dockerfile
+
+FROM debian:bookworm
+
+RUN apt-get update && apt-get install -y \
+    nginx \
+    openssl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY conf/nginx.conf /etc/nginx/nginx.conf
+COPY tools/setup.sh /usr/local/bin/setup.sh
+
+RUN chmod +x /usr/local/bin/setup.sh
+
+EXPOSE 443
+
+ENTRYPOINT ["/usr/local/bin/setup.sh"]
+3. NGINX configuration
+
+Put this in:
+
+srcs/requirements/nginx/conf/nginx.conf
+
+events {}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    sendfile on;
+    keepalive_timeout 65;
+
+    server {
+        listen 443 ssl;
+        listen [::]:443 ssl;
+        server_name mcalciat.42.fr;
+
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_certificate /etc/nginx/ssl/inception.crt;
+        ssl_certificate_key /etc/nginx/ssl/inception.key;
+
+        root /var/www/html;
+        index index.php index.html index.htm;
+
+        location / {
+            try_files $uri $uri/ /index.php?$args;
+        }
+
+        location ~ \.php$ {
+            include fastcgi_params;
+            fastcgi_pass wordpress:9000;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME /var/www/html$fastcgi_script_name;
+        }
+    }
+}
+4. NGINX setup script
+
+Put this in:
+
+srcs/requirements/nginx/tools/setup.sh
+
+#!/bin/bash
+set -e
+
+mkdir -p /etc/nginx/ssl
+
+if [ ! -f /etc/nginx/ssl/inception.crt ] || [ ! -f /etc/nginx/ssl/inception.key ]; then
+    openssl req -x509 -nodes -days 365 \
+        -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/inception.key \
+        -out /etc/nginx/ssl/inception.crt \
+        -subj "/C=LU/ST=Luxembourg/L=Luxembourg/O=42/OU=42/CN=${DOMAIN_NAME}"
+fi
+
+exec nginx -g "daemon off;"
+
+This is good for the project because:
+
+no infinite loop
+nginx stays in foreground as PID 1
+TLS cert gets created inside the container
+no password is hardcoded in Dockerfile
+5. Add nginx service to docker-compose
+
+Your docker-compose.yml should now become this:
+
+services:
+  mariadb:
+    container_name: mariadb
+    build: ./requirements/mariadb
+    image: inception-mariadb
+    env_file:
+      - .env
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - inception
+    restart: always
+
+  wordpress:
+    container_name: wordpress
+    build: ./requirements/wordpress
+    image: inception-wordpress
+    env_file:
+      - .env
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      - mariadb
+    networks:
+      - inception
+    restart: always
+
+  nginx:
+    container_name: nginx
+    build: ./requirements/nginx
+    image: inception-nginx
+    env_file:
+      - .env
+    ports:
+      - "443:443"
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      - wordpress
+    networks:
+      - inception
+    restart: always
+
+volumes:
+  mariadb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MYSQL_VOLUME}
+
+  wordpress_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${WP_VOLUME}
+
+networks:
+  inception:
+    driver: bridge
+Important notes
+
+nginx mounts the same wordpress_data volume as read access path for site files.
+That way:
+
+WordPress writes files there
+NGINX serves them from there
+
+
+6. Check .env
+
+Make sure this exists in srcs/.env:
+
+DOMAIN_NAME=mcalciat.42.fr
+
+MYSQL_DATABASE=wordpress
+MYSQL_USER=wpuser
+MYSQL_PASSWORD=wp_pass_42
+MYSQL_ROOT_PASSWORD=root_pass_42
+
+MYSQL_VOLUME=/home/mcalciat/data/mysql
+WP_VOLUME=/home/mcalciat/data/wordpress
+7. Update /etc/hosts in the VM
+
+Inside the VM, edit:
+
+sudo vim /etc/hosts
+
+Add this line:
+
+127.0.0.1 mcalciat.42.fr
+
+This is needed because the subject wants your domain name to resolve locally.
+
+If later you test from the host PC browser, you may also need to add the VM IP there, for example:
+
+192.168.x.x mcalciat.42.fr
+
+But for now, inside the VM, 127.0.0.1 is enough for local curl tests.
+
+8. Validate compose file before building
+
+From ~/Inception/srcs:
+
+docker compose config
+
+If that prints the resolved config with no errors, the YAML is good.
+
+9. Build and run
+docker compose up --build
+
+You should expect:
+
+mariadb up
+wordpress up
+nginx up
+10. Check containers
+
+In another terminal:
+
+docker ps
+
+You want to see something like:
+
+mariadb → Up
+wordpress → Up
+nginx → Up
+
+Then check nginx logs:
+
+docker compose logs nginx
+
+If all is fine, it may be mostly quiet.
+
+11. First connectivity tests
+
+Inside the VM, try:
+
+curl -k https://mcalciat.42.fr
+
+The -k is because the certificate is self-signed.
+
+If nginx and wordpress are connected correctly, you should get HTML back.
+
+You can also test just headers:
+
+curl -k -I https://mcalciat.42.fr
+
+A healthy result would look like HTTP/1.1 200 OK or possibly a redirect depending on WordPress state.
+
+12. If nginx fails, the most common causes
+A. host not found in upstream "wordpress"
+
+That means nginx cannot resolve the WordPress container name.
+Check:
+
+docker exec -it nginx getent hosts wordpress
+B. connect() failed (111: Connection refused)
+
+That usually means WordPress/php-fpm is not listening on 9000.
+Check:
+
+docker exec -it wordpress ps aux
+C. SSL file issue
+
+If cert paths are wrong, nginx logs will complain about missing .crt or .key.
+
+D. Wrong server_name
+
+Make sure server_name in nginx.conf matches DOMAIN_NAME.
+
+13. Mental model
+
+You now have:
+
+NGINX
+- public
+- HTTPS only
+- serves /var/www/html
+- sends PHP to wordpress:9000
+
+WordPress
+- php-fpm only
+- no direct public port
+
+MariaDB
+- internal DB only
+
+That is exactly the separation expected by the subject.
+
+14. Recommended next move
+
+Do these in order:
+
+create the 3 nginx files
+update compose
+add /etc/hosts
+run docker compose config
+run docker compose up --build
+
+Then paste me:
+
+docker compose logs nginx
+docker ps
+output of curl -k -I https://mcalciat.42.fr
+
+and we’ll verify the full stack.
+
+---
+
+
+
 🪜 STEP 5 — Volumes
 Create named volumes
 

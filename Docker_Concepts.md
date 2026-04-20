@@ -110,3 +110,8 @@ If you remember only ONE thing:
 Image → builds → Container → uses → Volume + Network
 
 
+---
+
+PENDING
+
+- DOCKER-COMPOSE FILE : tips, tabulation, etc

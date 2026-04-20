@@ -21,3 +21,4 @@ Docker uses a `client-server architecture`. The Docker client talks to the Docke
 ## Resources:
 1. [dockerdocs - What is Docker?](https://docs.docker.com/get-started/docker-overview/)
 2. [GfG - Waht is Docker?] (https://www.geeksforgeeks.org/devops/introduction-to-docker/)
+3. [MariaDB.org](https://mariadb.org/en/)
