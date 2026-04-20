@@ -80,8 +80,14 @@ scp maria@192.168.1.45:/home/maria/test.txt .
 ### 📤📥Copy folders FROM your local machine → VM
 ```bash
 scp -r folder/ username@VM_IP:/home/username/
-
 ```
+
+```bash
+scp -r mcalciat@10.13.200.243:/home/mcalciat/Inception . 
+scp -r mcalciat@10.13.200.243:/home/mcalciat/data/wordpress .
+scp -r mcalciat@10.13.200.243:/home/mcalciat/data/mysql . 
+```
+
 ## 🔥 Generate SSH-keygen
 Avoid typing password every time (SSH keys).  
 On your local machine:
