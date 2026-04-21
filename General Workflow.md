@@ -29,6 +29,9 @@
     - [10. Check containers](#10-check-containers)
     - [11. First connectivity tests](#11-first-connectivity-tests)
     - [12. Issues](#12-issues)
+  - [🪜 STEP 5 — Makefile](#-step-5--makefile)
+  - [🪜 STEP 6 — Testing](#-step-6--testing)
+  - [🪜 STEP 7 — Documentation](#-step-7--documentation)
 
 ---
 
@@ -520,7 +523,11 @@ RUN apt-get update && apt-get install -y \
     php-fpm \
     php-mysql \
     curl \
+    mariadb-client \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN curl -o /usr/local/bin/wp https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
+    && chmod +x /usr/local/bin/wp
 
 COPY tools/setup.sh /usr/local/bin/setup.sh
 
@@ -531,6 +538,25 @@ EXPOSE 9000
 ENTRYPOINT ["/usr/local/bin/setup.sh"]
 ```
 
+until mariadb -h mariadb -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "SELECT 1;" >/dev/null 2>&1
+do
+    echo "Waiting for MariaDB..."
+    sleep 2
+done
+
+if ! wp core is-installed --allow-root >/dev/null 2>&1; then
+    wp core install --allow-root \
+        --url="https://${DOMAIN_NAME}" \
+        --title="${WP_TITLE}" \
+        --admin_user="${WP_ADMIN_USER}" \
+        --admin_password="${WP_ADMIN_PASSWORD}" \
+        --admin_email="${WP_ADMIN_EMAIL}"
+
+    wp user create "${WP_USER}" "${WP_USER_EMAIL}" \
+        --user_pass="${WP_USER_PASSWORD}" \
+        --role=author \
+        --allow-root
+fi
 `RUN` is installing or updating:  
 * `php-fpm` → runs PHP server (NGINX will connect later)
 * `php-mysql` → allows WordPress ↔ MariaDB communication
@@ -567,6 +593,28 @@ if [ ! -f wp-config.php ]; then
     sed -i "s/username_here/${MYSQL_USER}/" wp-config.php
     sed -i "s/password_here/${MYSQL_PASSWORD}/" wp-config.php
     sed -i "s/localhost/mariadb/" wp-config.php
+fi
+
+#Wait for mariaDB to create the DB
+until mariadb -h mariadb -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "SELECT 1;" >/dev/null 2>&1
+do
+    echo "Waiting for MariaDB..."
+    sleep 2
+done
+
+# configure Wordpress
+if ! wp core is-installed --allow-root >/dev/null 2>&1; then
+    wp core install --allow-root \
+        --url="https://${DOMAIN_NAME}" \
+        --title="${WP_TITLE}" \
+        --admin_user="${WP_ADMIN_USER}" \
+        --admin_password="${WP_ADMIN_PASSWORD}" \
+        --admin_email="${WP_ADMIN_EMAIL}"
+
+    wp user create "${WP_USER}" "${WP_USER_EMAIL}" \
+        --user_pass="${WP_USER_PASSWORD}" \
+        --role=author \
+        --allow-root
 fi
 
 # Configure PHP-FPM to listen on all interfaces
@@ -902,8 +950,6 @@ networks:
 
 Make sure this exists in `srcs/.env`:
 ```bash
-DOMAIN_NAME=mcalciat.42.fr
-
 MYSQL_DATABASE=wordpress
 MYSQL_USER=wpuser
 MYSQL_PASSWORD=wp_pass_42
@@ -911,6 +957,17 @@ MYSQL_ROOT_PASSWORD=root_pass_42
 
 MYSQL_VOLUME=/home/mcalciat/data/mysql
 WP_VOLUME=/home/mcalciat/data/wordpress
+DOMAIN_NAME=mcalciat.42.fr
+
+WP_TITLE=Inception WordPress
+
+WP_ADMIN_USER=guildMaster
+WP_ADMIN_PASSWORD=1234shouldnotbeapassword
+WP_ADMIN_EMAIL=guildmaster@example.com
+
+WP_USER=normal_user
+WP_USER_PASSWORD=myn0rm4lp4ss
+WP_USER_EMAIL=just_one_user@example.com
 ```
 
 ### 7. 📡 Update /etc/hosts in the VM
@@ -976,6 +1033,8 @@ If all is fine, it may be mostly quiet, or you'll see:
 
 Inside the VM, try:
 ```bash
+curl -k https://mcalciat.42.fr
+
 curl -k -I https://mcalciat.42.fr
 # The -k is because the certificate is self-signed.
 # -I is to inspect the headers
@@ -983,15 +1042,12 @@ curl -k -I https://mcalciat.42.fr
 A healthy result would look like HTTP/1.1 200 OK or possibly a redirect depending on WordPress state.
 
 ```bash
-HTTP/1.1 302 Found
+HTTP/1.1 200 OK
 Server: nginx/1.22.1
-Date: Tue, 21 Apr 2026 07:43:39 GMT
+Date: Tue, 21 Apr 2026 08:45:33 GMT
 Content-Type: text/html; charset=UTF-8
 Connection: keep-alive
-Expires: Wed, 11 Jan 1984 05:00:00 GMT
-Cache-Control: no-cache, must-revalidate, max-age=0, no-store, private
-X-Redirect-By: WordPress
-Location: https://mcalciat.42.fr/wp-admin/install.php
+Link: <https://mcalciat.42.fr/index.php?rest_route=/>; rel="https://api.w.org/"
 ```
 
 ### 12. Issues
@@ -1015,36 +1071,102 @@ Make sure server_name in nginx.conf matches DOMAIN_NAME.
 
 ---
 
+## 🪜 STEP 5 — Makefile
 
+```makefile
+NAME        = inception
+COMPOSE     = docker compose -f srcs/docker-compose.yml
+DATA_PATH   = /home/mcalciat/data
+MYSQL_DIR   = $(DATA_PATH)/mysql
+WP_DIR      = $(DATA_PATH)/wordpress
 
-🪜 STEP 5 — Volumes
-Create named volumes
+all: up
 
-Map to:
+up: create_dirs
+	$(COMPOSE) up --build -d
 
-/home/<login>/data
-🪜 STEP 6 — Docker Compose
-Connect all containers
-Define network
-Define volumes
+build: create_dirs
+	$(COMPOSE) build
 
+down:
+	$(COMPOSE) down
 
+start: create_dirs
+	$(COMPOSE) up -d
 
+stop:
+	$(COMPOSE) stop
 
-🪜 STEP 7 — Domain setup
+restart: down up
 
-Edit /etc/hosts:
+logs:
+	$(COMPOSE) logs
 
-127.0.0.1  yourlogin.42.fr
-🪜 STEP 8 — Security & env
-.env file
-Docker secrets
-🪜 STEP 9 — Testing
+ps:
+	$(COMPOSE) ps
 
-Open browser:
+create_dirs:
+	mkdir -p $(MYSQL_DIR)
+	mkdir -p $(WP_DIR)
 
-https://yourlogin.42.fr
-🪜 STEP 10 — Documentation
+clean: down
+	$(COMPOSE) down -v
+
+fclean: down
+	$(COMPOSE) down -v --rmi all
+	sudo rm -rf $(MYSQL_DIR)
+	sudo rm -rf $(WP_DIR)
+	mkdir -p $(MYSQL_DIR)
+	mkdir -p $(WP_DIR)
+
+re: fclean up
+
+.PHONY: all up build down start stop restart logs ps create_dirs clean fclean re
+```
+
+`COMPOSE` → avoids repeating the full docker compose command.  
+`DATA_PATH` → central place to define where volumes live.  
+`make`  → default command for evaluation. Sasme as doing `make up`.  
+`make up`  → creates required folders, builds images, starts containers IN THE background.  
+`make build`  → Builds images only (no container start) if you modify Dockerfiles.  
+`make down `  → Stops and removescontainers and network (DOES NOT REMOVE VOLUMES, data stays).  
+`make start `  → Starts containers without rebuilding (to be use after `make down`).  
+`make stop`  → Stops containers but keeps them available to restart.  
+`make restart`  → make down + make up.  
+`make logs`  → Shows logs from all containers. Useful for debugging.  
+`make ps`  → Shows container status.  
+`make create_dirs`  →  Creates directories for volumes. Ensures host directories exist before Docker mounts volumes.  
+
+`make clean`  → stops containers + removes volumes. It does NOT delete /home/mcalciat/data/* (data still exists).  
+`make fclean`  → FULL RESET: removes containers + removes volumes + removes images + deletes ALL data folders (including hidden files!) + recreates empty directories.  
+
+---
+
+## 🪜 STEP 6 — Testing
+In the VM, open browser:
+```
+https://<yourlogin>.42.fr
+```
+The Hello World wordpress web should appear. 
+![hello world](pics/WPsite_helloworld.png)
+
+Scroll down and leave a comment. 
+
+Then, go to the login
+```
+https://<yourlogin>.42.fr/wp-admin
+```
+Use the admin credentials that were created, and gain access to the user panel. You can then check if both users are there...
+
+![wp user settings](pics/WPsite_usersTable.png)
+
+As admin, you can approve the comment that was submitted. Then refresh the home site, and check if the comment is there. 
+
+To test permanence of information, use `make restart` and/or `make clean` (NOT fclean or the information will be deleted). Once everything is up again, you can check the website again, and re-validate users are there, and the comment is there too. 
+
+---
+
+## 🪜 STEP 7 — Documentation
 README
 USER_DOC
 DEV_DOC
