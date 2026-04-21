@@ -1,3 +1,37 @@
+- [General Workflow](#general-workflow)
+  - [🪜 STEP 0 — Prepare environment](#-step-0--prepare-environment)
+    - [A. Install a Virtual Machine (VM)](#a-install-a-virtual-machine-vm)
+    - [B. Set up OpenSSH to comunicate your PC and your VM](#b-set-up-openssh-to-comunicate-your-pc-and-your-vm)
+    - [B. Install Docker + Docker Compose](#b-install-docker--docker-compose)
+  - [🪜 STEP 1 — Project structure](#-step-1--project-structure)
+  - [🪜 STEP 2 — Build MariaDB container](#-step-2--build-mariadb-container)
+    - [🧼 Reset \& re-testing](#-reset--re-testing)
+    - [📯 Recap of Step-2](#-recap-of-step-2)
+  - [🪜 STEP 3 — Build WordPress container](#-step-3--build-wordpress-container)
+    - [🧱 1. Create files](#-1-create-files)
+    - [🐳 2. Dockerfile](#-2-dockerfile)
+    - [⚙️ 3. WordPress setup script](#️-3-wordpress-setup-script)
+    - [🧩 4. docker-compose (WordPress part)](#-4-docker-compose-wordpress-part)
+    - [💾 5. Verify .env](#-5-verify-env)
+    - [🧪 6. Test WordPress container](#-6-test-wordpress-container)
+    - [🚨 8. Common mistakes](#-8-common-mistakes)
+    - [9. 🧠 Recap](#9--recap)
+  - [🪜 STEP 4 — Build NGINX container](#-step-4--build-nginx-container)
+    - [1. Create the nginx files](#1-create-the-nginx-files)
+    - [2. NGINX Dockerfile](#2-nginx-dockerfile)
+    - [3. NGINX configuration](#3-nginx-configuration)
+    - [4. NGINX setup script](#4-nginx-setup-script)
+    - [5. Add nginx service to docker-compose](#5-add-nginx-service-to-docker-compose)
+    - [6. Check .env](#6-check-env)
+    - [7. 📡 Update /etc/hosts in the VM](#7--update-etchosts-in-the-vm)
+    - [8. Validate compose file before building](#8-validate-compose-file-before-building)
+    - [9. Build and run](#9-build-and-run)
+    - [10. Check containers](#10-check-containers)
+    - [11. First connectivity tests](#11-first-connectivity-tests)
+    - [12. Issues](#12-issues)
+
+---
+
 # General Workflow 
 
 ## 🪜 STEP 0 — Prepare environment
@@ -664,7 +698,7 @@ getent hosts mariadb
 ![WP config check](pics/wordpress_check_DB_connection_config.png)
 
 
-### 🚨 8. Common mistakes (you WILL hit these)
+### 🚨 8. Common mistakes 
 
 | Issue   | Cause | Check:  |
 |---------|-------|-------------------|
@@ -686,35 +720,30 @@ NO HTTP & NO nginx here.
 ---
 
 ## 🪜 STEP 4 — Build NGINX container
-This will add the only public entrypoint of the project:  
+This will add the *only public entrypoint of the project*:  
 1. NGINX  
 2. HTTPS only  
 3. TLS 1.2 / 1.3 only  
 4. reverse proxy / FastCGI to wordpress:9000  
 
-At the end of this step, the flow will be:
+> 🧭 **At the end of this step, the flow will be:**
 ```yaml
 Browser → NGINX:443 → WordPress:9000 → MariaDB:3306
 ```
 
-1. Create the nginx files
+### 1. Create the nginx files
 
 From your project root:
-
-mkdir -p ~/Inception/srcs/requirements/nginx/conf
-mkdir -p ~/Inception/srcs/requirements/nginx/tools
-
+```bash
 touch ~/Inception/srcs/requirements/nginx/Dockerfile
 touch ~/Inception/srcs/requirements/nginx/conf/nginx.conf
 touch ~/Inception/srcs/requirements/nginx/tools/setup.sh
-
 chmod +x ~/Inception/srcs/requirements/nginx/tools/setup.sh
-2. NGINX Dockerfile
+```
 
-Put this in:
-
-srcs/requirements/nginx/Dockerfile
-
+### 2. NGINX Dockerfile
+Inside `srcs/requirements/nginx/Dockerfile`
+```Dockerfile
 FROM debian:bookworm
 
 RUN apt-get update && apt-get install -y \
@@ -730,12 +759,11 @@ RUN chmod +x /usr/local/bin/setup.sh
 EXPOSE 443
 
 ENTRYPOINT ["/usr/local/bin/setup.sh"]
-3. NGINX configuration
+```
 
-Put this in:
-
-srcs/requirements/nginx/conf/nginx.conf
-
+### 3. NGINX configuration
+Inside `srcs/requirements/nginx/conf/nginx.conf`
+```conf
 events {}
 
 http {
@@ -769,12 +797,11 @@ http {
         }
     }
 }
-4. NGINX setup script
+```
 
-Put this in:
-
-srcs/requirements/nginx/tools/setup.sh
-
+### 4. NGINX setup script
+Inside `srcs/requirements/nginx/tools/setup.sh`
+```bash
 #!/bin/bash
 set -e
 
@@ -789,6 +816,7 @@ if [ ! -f /etc/nginx/ssl/inception.crt ] || [ ! -f /etc/nginx/ssl/inception.key 
 fi
 
 exec nginx -g "daemon off;"
+```
 
 This is good for the project because:
 
@@ -796,10 +824,11 @@ no infinite loop
 nginx stays in foreground as PID 1
 TLS cert gets created inside the container
 no password is hardcoded in Dockerfile
-5. Add nginx service to docker-compose
+
+### 5. Add nginx service to docker-compose
 
 Your docker-compose.yml should now become this:
-
+```bash
 services:
   mariadb:
     container_name: mariadb
@@ -861,19 +890,18 @@ volumes:
 networks:
   inception:
     driver: bridge
-Important notes
+```
 
-nginx mounts the same wordpress_data volume as read access path for site files.
-That way:
+> **Important notes:** nginx mounts the same wordpress_data volume as read access path for site files.  
+> That way:
+> - WordPress writes files there
+> - NGINX serves them from there
 
-WordPress writes files there
-NGINX serves them from there
 
+### 6. Check .env
 
-6. Check .env
-
-Make sure this exists in srcs/.env:
-
+Make sure this exists in `srcs/.env`:
+```bash
 DOMAIN_NAME=mcalciat.42.fr
 
 MYSQL_DATABASE=wordpress
@@ -883,131 +911,107 @@ MYSQL_ROOT_PASSWORD=root_pass_42
 
 MYSQL_VOLUME=/home/mcalciat/data/mysql
 WP_VOLUME=/home/mcalciat/data/wordpress
-7. Update /etc/hosts in the VM
+```
+
+### 7. 📡 Update /etc/hosts in the VM
 
 Inside the VM, edit:
-
+```bash
 sudo vim /etc/hosts
+```
 
 Add this line:
-
+```text
 127.0.0.1 mcalciat.42.fr
+```
 
-This is needed because the subject wants your domain name to resolve locally.
+> **This is needed because the subject wants your domain name to resolve locally.**
 
-If later you test from the host PC browser, you may also need to add the VM IP there, for example:
 
-192.168.x.x mcalciat.42.fr
-
-But for now, inside the VM, 127.0.0.1 is enough for local curl tests.
-
-8. Validate compose file before building
-
-From ~/Inception/srcs:
-
+### 8. Validate compose file before building
+```bash
+cd ~/Inception/srcs:
 docker compose config
-
+```
 If that prints the resolved config with no errors, the YAML is good.
 
-9. Build and run
+### 9. Build and run
+```bash
 docker compose up --build
-
+```
 You should expect:
+- mariadb up
+- wordpress up
+- nginx up
 
-mariadb up
-wordpress up
-nginx up
-10. Check containers
+```bash
+[+] up 7/7
+ ✔ Image wordpress        Built              5.9s
+ ✔ Image inception-nginx  Built              5.9s
+ ✔ Image mariadb          Built              5.9s
+ ✔ Network srcs_inception Created            0.0s
+ ✔ Container mariadb      Created            0.1s
+ ✔ Container wordpress    Created            0.0s
+ ✔ Container nginx        Created            0.0s
+Attaching to mariadb, nginx, wordpress
+```
+### 10. Check containers
 
 In another terminal:
-
+```bash
 docker ps
-
+```
 You want to see something like:
 
-mariadb → Up
-wordpress → Up
-nginx → Up
+![docker ps test nginx](pics/nginx_ps_test.png)
 
 Then check nginx logs:
-
+```bash
 docker compose logs nginx
+```
+If all is fine, it may be mostly quiet, or you'll see:  
+![nginx logs](pics/nginx_logs.png)
 
-If all is fine, it may be mostly quiet.
-
-11. First connectivity tests
+### 11. First connectivity tests
 
 Inside the VM, try:
-
-curl -k https://mcalciat.42.fr
-
-The -k is because the certificate is self-signed.
-
-If nginx and wordpress are connected correctly, you should get HTML back.
-
-You can also test just headers:
-
+```bash
 curl -k -I https://mcalciat.42.fr
-
+# The -k is because the certificate is self-signed.
+# -I is to inspect the headers
+```
 A healthy result would look like HTTP/1.1 200 OK or possibly a redirect depending on WordPress state.
 
-12. If nginx fails, the most common causes
-A. host not found in upstream "wordpress"
+```bash
+HTTP/1.1 302 Found
+Server: nginx/1.22.1
+Date: Tue, 21 Apr 2026 07:43:39 GMT
+Content-Type: text/html; charset=UTF-8
+Connection: keep-alive
+Expires: Wed, 11 Jan 1984 05:00:00 GMT
+Cache-Control: no-cache, must-revalidate, max-age=0, no-store, private
+X-Redirect-By: WordPress
+Location: https://mcalciat.42.fr/wp-admin/install.php
+```
 
+### 12. Issues
+If `nginx` fails, the most common causes are:  
+`A`. host not found in upstream "wordpress"
 That means nginx cannot resolve the WordPress container name.
 Check:
+- docker exec -it nginx getent hosts wordpress
 
-docker exec -it nginx getent hosts wordpress
-B. connect() failed (111: Connection refused)
-
+`B`. connect() failed (111: Connection refused)
 That usually means WordPress/php-fpm is not listening on 9000.
 Check:
+- docker exec -it wordpress ps aux
 
-docker exec -it wordpress ps aux
-C. SSL file issue
-
+`C`. SSL file issue
 If cert paths are wrong, nginx logs will complain about missing .crt or .key.
 
-D. Wrong server_name
-
+`D`. Wrong server_name
 Make sure server_name in nginx.conf matches DOMAIN_NAME.
 
-13. Mental model
-
-You now have:
-
-NGINX
-- public
-- HTTPS only
-- serves /var/www/html
-- sends PHP to wordpress:9000
-
-WordPress
-- php-fpm only
-- no direct public port
-
-MariaDB
-- internal DB only
-
-That is exactly the separation expected by the subject.
-
-14. Recommended next move
-
-Do these in order:
-
-create the 3 nginx files
-update compose
-add /etc/hosts
-run docker compose config
-run docker compose up --build
-
-Then paste me:
-
-docker compose logs nginx
-docker ps
-output of curl -k -I https://mcalciat.42.fr
-
-and we’ll verify the full stack.
 
 ---
 

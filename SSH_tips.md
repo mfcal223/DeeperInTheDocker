@@ -5,8 +5,14 @@
 docker info
 sudo docker run hello-world
 docker ps
+```
 
-## ?
+## Verify docker compose file
+```bash
+docker compose config
+# If that prints the resolved config with no errors, the YAML is good.
+```
+## Start/stop Containers
 ```bash
 docker compose up --build
 docker ps
