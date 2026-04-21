@@ -907,7 +907,7 @@ services:
   nginx:
     container_name: nginx
     build: ./requirements/nginx
-    image: inception-nginx
+    image: nginx
     env_file:
       - .env
     ports:
