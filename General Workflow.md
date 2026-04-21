@@ -1143,6 +1143,37 @@ re: fclean up
 ---
 
 ## 🪜 STEP 6 — Testing
+```bash
+make
+
+#check containers exist, are up and running
+docker ps
+docker compose -f srcs/docker-compose.yml ps
+docker compose -f srcs/docker-compose.yml logs mariadb
+docker compose -f srcs/docker-compose.yml logs wordpress
+docker compose -f srcs/docker-compose.yml logs nginx
+
+# check volumes exist
+ls -la /home/mcalciat/data
+ls -la /home/mcalciat/data/mysql
+ls -la /home/mcalciat/data/wordpress
+docker volume ls
+
+#check mariadb
+docker exec -it mariadb mariadb -u root -p
+SHOW DATABASES;
+SELECT User, Host FROM mysql.user;
+
+#check wordpress users exists
+docker exec -it wordpress wp user list --allow-root --path=/var/www/html
+
+#check nginx/TLS
+curl -kI https://mcalciat.42.fr
+openssl s_client -connect mcalciat.42.fr:443 -tls1_2
+openssl s_client -connect mcalciat.42.fr:443 -tls1_3
+```
+
+
 In the VM, open browser:
 ```
 https://<yourlogin>.42.fr
