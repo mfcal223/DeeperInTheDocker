@@ -1159,6 +1159,11 @@ ls -la /home/mcalciat/data/mysql
 ls -la /home/mcalciat/data/wordpress
 docker volume ls
 
+ls -la /home/username/data
+ls -la /home/username/data/mysql
+ls -la /home/username/data/wordpress
+docker volume ls
+
 #check mariadb
 docker exec -it mariadb mariadb -u root -p
 SHOW DATABASES;
@@ -1171,6 +1176,10 @@ docker exec -it wordpress wp user list --allow-root --path=/var/www/html
 curl -kI https://mcalciat.42.fr
 openssl s_client -connect mcalciat.42.fr:443 -tls1_2
 openssl s_client -connect mcalciat.42.fr:443 -tls1_3
+
+curl -kI https://username.42.fr
+openssl s_client -connect username.42.fr:443 -tls1_2
+openssl s_client -connect username.42.fr:443 -tls1_3
 ```
 
 
