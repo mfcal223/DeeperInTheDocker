@@ -1,6 +1,6 @@
 # Makefile commands
 
-`make`  → default command for evaluation. Sasme as doing `make up`.  
+`make`  → default command for evaluation. Same as doing `make up`.  
 `make up`  → creates required folders, builds images, starts containers IN THE background.  
 `make build`  → Builds images only (no container start) if you modify Dockerfiles.  
 `make down `  → Stops and removescontainers and network (DOES NOT REMOVE VOLUMES, data stays).  
@@ -38,6 +38,14 @@ docker compose down
 docker compose down -v 
 # (clean the  volumes!!)
 ```
+
+## volumes check
+```bash
+docker volume ls
+docker volume inspect mariadb_data
+docker volume inspect wordpress_data
+```
+
 ## Mariadb 
 ```bash
 docker compose logs mariadb
@@ -135,6 +143,7 @@ scp maria@192.168.1.45:/home/maria/test.txt .
 scp -r folder/ username@VM_IP:/home/username/
 ```
 
+### 📥 Copy folder FROM VM → your local machine
 ```bash
 scp -r mcalciat@10.13.200.243:/home/mcalciat/Inception . 
 scp -r mcalciat@10.13.200.243:/home/mcalciat/data/wordpress .

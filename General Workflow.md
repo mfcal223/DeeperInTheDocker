@@ -1,8 +1,9 @@
 - [General Workflow](#general-workflow)
   - [🪜 STEP 0 — Prepare environment](#-step-0--prepare-environment)
     - [A. Install a Virtual Machine (VM)](#a-install-a-virtual-machine-vm)
-    - [B. Set up OpenSSH to comunicate your PC and your VM](#b-set-up-openssh-to-comunicate-your-pc-and-your-vm)
+    - [B. Set up OpenSSH to communicate between your PC and your VM](#b-set-up-openssh-to-communicate-between-your-pc-and-your-vm)
     - [B. Install Docker + Docker Compose](#b-install-docker--docker-compose)
+    - [C. Configure Docker volume storage location](#c-configure-docker-volume-storage-location)
   - [🪜 STEP 1 — Project structure](#-step-1--project-structure)
   - [🪜 STEP 2 — Build MariaDB container](#-step-2--build-mariadb-container)
     - [🧼 Reset \& re-testing](#-reset--re-testing)
@@ -31,7 +32,7 @@
     - [12. Issues](#12-issues)
   - [🪜 STEP 5 — Makefile](#-step-5--makefile)
   - [🪜 STEP 6 — Testing](#-step-6--testing)
-  - [🪜 STEP 7 — Documentation](#-step-7--documentation)
+  - [🪜 STEP 7 — Security Warnings \& Documentation](#-step-7--security-warnings--documentation)
 
 ---
 
@@ -49,7 +50,7 @@ https://cdimage.debian.org/cdimage/archive/12.9.0/amd64/iso-cd/debian-12.9.0-amd
 user: mcalciat
 pwd: inception42
 ram size: 2 GB
-processirs: 2 CPU
+processors: 2 CPU
 Disk size: 20 GB
 
 3. Go to Settings > Network and change NAT to Bridged Adapter. You will need to to setup an SSH connection.
@@ -61,7 +62,7 @@ Disk size: 20 GB
     * check: `sudo whoami` (shoudl reply "root")
 
 
-### B. Set up OpenSSH to comunicate your PC and your VM
+### B. Set up OpenSSH to communicate between your PC and your VM
 
 - OpenSSH server → runs inside your VM  
 - OpenSSH client → runs on your local machine  
@@ -84,7 +85,7 @@ sudo systemctl start ssh
 sudo systemctl enable ssh
 ```
 
-Find out, the VM's ip
+Find the VM's IP address
 ```bash
 ip a
 ```
@@ -111,7 +112,7 @@ Debian’s default repositories may have older Docker versions. This project exp
 > Without a GPG key, anyone could fake a package and make an user install malware instead of Docker.  
 
 After installing curl, create a directory where the system will store trusted GPG keys (like Docker’s key).
-Download the Dockers public signing key, and convert it into a format usable by APT and save it.
+Download Docker’s public signing key, and convert it into a format usable by APT and save it.
 
 **Run**: 
 ```bash
@@ -189,6 +190,47 @@ sudo usermod -aG docker $USER
 ```
 and `exit` ssh connection, and `restart` the VM.
 
+### C. Configure Docker volume storage location
+
+The subject requires using **Docker named volumes**, but it also says that the volume data must be stored inside:
+
+```bash
+/home/<login>/data
+```
+At first, it may seem easier to force this path directly inside docker-compose.yml using `driver_opts`, `device`, and` o: bind`.
+However, that creates a *bind mount behavior*, and bind mounts are *not allowed* by the subject.  
+
+To keep the project compliant, the docker-compose.yml must use real Docker named volumes, without driver_opts.  
+
+To make Docker store those named volumes under /home/<login>/data, configure Docker’s own storage directory.   
+This ensures that Docker named volumes are stored in a location that complies with the subject requirements, without using bind mounts.  
+
+> ⚠️ This configuration must be applied before running `make` for the first time.  
+> If Docker volumes were already created, they must be removed (`docker compose down -v`) before applying this configuration.
+
+```bash
+# stop docker
+sudo systemctl stop docker
+# Create the required data directory
+sudo mkdir -p /home/mcalciat/data/docker
+# Edit Docker’s daemon configuration:
+sudo vim /etc/docker/daemon.json
+# Add this content: 
+{
+  "data-root": "/home/mcalciat/data/docker"
+}
+# Reload systemd and restart Docker:
+sudo systemctl daemon-reload
+sudo systemctl start docker
+```
+
+To verify Docker is using the correct storage location 
+```bash
+docker info | grep "Docker Root Dir"
+# the expected output is :
+Docker Root Dir: /home/mcalciat/data/docker
+```
+
 ---
 
 ## 🪜 STEP 1 — Project structure
@@ -223,12 +265,16 @@ tree ~/Inception
 find ~/Inception -type d -o -type f | sort
 ```
 
-Because the subject says the named volumes must store data inside: `/home/login/data`, create them:
+Because the subject requires that persistent data is stored inside `/home/<login>/data`, Docker must be configured to use that location for its internal storage.
+
+Create the base directory:
 
 ```bash
-mkdir -p /home/mcalciat/data/mysql
-mkdir -p /home/mcalciat/data/wordpress
+mkdir -p /home/mcalciat/data/docker
 ```
+
+There is no need to manually create `/mysql` or `/wordpress` folders, because the project is using proper Docker named volumes. Docker manages the internal volume structure automatically under its data root directory, which I configured to `/home/mcalciat/data/docker`.  
+Docker named volumes are used instead of bind mounts because they are managed by Docker and provide better isolation, portability, and compliance with the subject requirements.  
 
 ---
 
@@ -335,7 +381,7 @@ These lines: `/var/lib/mysql/.setup_done` will:
 
 4. Include mariadb's setup script variables in `.env`
 MariaDB's setup.sh script expects the definition of those variables it uses.   
-These needs to placed in `.env` when we wire MariaDB into `docker-compose.yml`.
+These need to be placed in`.env` when we wire MariaDB into `docker-compose.yml`.
 Fill `.env` with these lines:
 ```bash
 MYSQL_DATABASE=wordpress
@@ -373,11 +419,7 @@ services:
 
 volumes:
   mariadb_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${MYSQL_VOLUME}
+    name: mariadb_data
 
 networks:
   inception:
@@ -421,7 +463,7 @@ docker compose logs mariadb
 ```
 
 7. Database validation
-Seeing logs prove the server is running, bit to actual confirm that the database was created, the SQL user was created and the root password was applied, do as follows:
+Seeing logs prove the server is running, but to actually confirm that the database was created, the SQL user was created and the root password was applied, do as follows:
 ```bash
 docker exec -it mariadb bash
 ```
@@ -639,10 +681,12 @@ WordPress files live in:
 /var/www/html
 ```
 
-👉 This must be mounted to:
+👉 This is stored in a Docker named volume.
+👉 The actual files are located under Docker's data root:
+```bash
+/home/<login>/data/docker/volumes/wordpress_data/_data
 ```
-/home/<login>/data/wordpress
-```
+
 🌐 3. php-fpm (port 9000)
 WordPress does NOT serve HTTP
 It only processes PHP
@@ -680,18 +724,9 @@ services:
 
 volumes:
   mariadb_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${MYSQL_VOLUME}
-
+    name: mariadb_data
   wordpress_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${WP_VOLUME}
+    name: wordpress_data
 
 ```
 
@@ -720,7 +755,7 @@ docker exec -it wordpress ps aux
 ```
 You can confirm WordPress(WP) files exists in the volume
 ```bash
-ls -la /home/mcalciat/data/wordpress
+ls -la /home/mcalciat/data/docker/volumes/
 ```
 you should see files like 
 ```
@@ -761,7 +796,7 @@ WordPress container:
 - connects to DB → mariadb container  
 
 If all went well, now WordPress container is correctly built and running, it is correctly connected to MariaDB, the volumes and network are working.
-NO HTTP & NO nginx here.
+No HTTP server and no NGINX are used in this container.
 
 
 
@@ -772,7 +807,7 @@ This will add the *only public entrypoint of the project*:
 1. NGINX  
 2. HTTPS only  
 3. TLS 1.2 / 1.3 only  
-4. reverse proxy / FastCGI to wordpress:9000  
+4. reverse proxy using FastCGI to wordpress:9000 
 
 > 🧭 **At the end of this step, the flow will be:**
 ```yaml
@@ -881,7 +916,7 @@ services:
   mariadb:
     container_name: mariadb
     build: ./requirements/mariadb
-    image: inception-mariadb
+    image: mariadb
     env_file:
       - .env
     volumes:
@@ -893,7 +928,7 @@ services:
   wordpress:
     container_name: wordpress
     build: ./requirements/wordpress
-    image: inception-wordpress
+    image: wordpress
     env_file:
       - .env
     volumes:
@@ -922,18 +957,9 @@ services:
 
 volumes:
   mariadb_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${MYSQL_VOLUME}
-
+    name: mariadb_data
   wordpress_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${WP_VOLUME}
+    name: wordpress_data
 
 networks:
   inception:
@@ -1126,7 +1152,7 @@ re: fclean up
 
 `COMPOSE` → avoids repeating the full docker compose command.  
 `DATA_PATH` → central place to define where volumes live.  
-`make`  → default command for evaluation. Sasme as doing `make up`.  
+`make`  → default command for evaluation. Same as doing `make up`.  
 `make up`  → creates required folders, builds images, starts containers IN THE background.  
 `make build`  → Builds images only (no container start) if you modify Dockerfiles.  
 `make down `  → Stops and removescontainers and network (DOES NOT REMOVE VOLUMES, data stays).  
@@ -1146,7 +1172,7 @@ re: fclean up
 ```bash
 make
 
-#check containers exist, are up and running
+#check that containers exist, are running
 docker ps
 docker compose -f srcs/docker-compose.yml ps
 docker compose -f srcs/docker-compose.yml logs mariadb
@@ -1163,6 +1189,13 @@ ls -la /home/username/data
 ls -la /home/username/data/mysql
 ls -la /home/username/data/wordpress
 docker volume ls
+
+# Confirm Docker stores its data under `/home/<login>/data`
+docker info | grep "Docker Root Dir"
+
+# Verify Docker named volumes 
+docker volume inspect mariadb_data
+docker volume inspect wordpress_data
 
 #check mariadb
 docker exec -it mariadb mariadb -u root -p
@@ -1206,7 +1239,11 @@ To test permanence of information, use `make restart` and/or `make clean` (NOT f
 
 ---
 
-## 🪜 STEP 7 — Documentation
+## 🪜 STEP 7 — Security Warnings & Documentation
+
+⚠️ The `.env` file must NOT be committed to the repository.  
+Add it to `.gitignore` before pushing your project.
+
 README
 USER_DOC
 DEV_DOC

@@ -118,3 +118,8 @@
 | Credentials injected via env |              ✅ | Variables used in setup scripts (`MYSQL_USER`, etc.)         |
 | No passwords in Dockerfiles  |             ✅* | No evidence in uploaded configs (*manual code review needed) |
 | `.env` not committed         | ⚠️ must ensure | `.gitignore` should include `.env`                           |
+
+
+---
+
+I use Docker named volumes, not bind mounts. Docker’s storage root is configured under /home/mcalciat/data, so the named volumes are still stored in the required host location.
