@@ -13,6 +13,11 @@ All services run automatically inside Docker containers and communicate internal
 
 ---
 
+#### *Note*:   
+In any of the commands where the `<login>` or `<username>` is requiered, please remeber to **REPLACE** it with the `your username!`
+
+---
+
 ## 🚀 Starting and Stopping the Project
 
 ### Start the project
@@ -85,6 +90,7 @@ https://mcalciat.42.fr
 
 The WordPress “Hello World” website should appear. 
 ![hello world](pics/WPsite_helloworld.png)
+
 ---
 
 ### WordPress Admin Panel
@@ -95,13 +101,15 @@ https://<login>.42.fr/wp-admin
 
 Use the administrator credentials defined in the `.env` file.  
 The `.env` file is **NOT** included in the repository for safety reasons. The owner of the project will provide you with it.  
-Use the administrator credentials defined in the .env file to access the dashboard. Verify that the users and the comment (if any were made) are still present.
+Use the administrator credentials defined in the `.env` file to access the dashboard.  
+Verify that the users and the comment (if any were made) are still present.
 
 ![wp user settings](pics/WPsite_usersTable.png)
 
 As admin, you can approve the comment that was submitted. Then refresh the home site, and check if the comment is there. 
 
-To test permanence of information, use `make restart` and/or `make clean` (NOT fclean or the information will be deleted). Once everything is up again, you can check the website again, and re-validate users are there, and the comment is there too. 
+To test permanence of information, use `make restart` and/or `make clean` (NOT *fclean* or the information will be deleted).  
+Once everything is up again, you can check the website again, and re-validate users are there, and the comment is there too. 
 
 ---
 

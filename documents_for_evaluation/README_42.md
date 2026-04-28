@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by mcalciat.*
+*This project has been created as part of the 42 curriculum by* ***mcalciat.***
 
 # Inception
 
@@ -168,7 +168,7 @@ volumes:
 ---
 
 # Resources:
-1. [dockerdocs - What is Docker?](https://docs.docker.com/get-started/docker-overview/)
+1. [Dockerdocs - What is Docker?](https://docs.docker.com/get-started/docker-overview/)
 2. [GfG - Waht is Docker?](https://www.geeksforgeeks.org/devops/introduction-to-docker/)
 3. [MariaDB.org](https://mariadb.org/en/)
 4. [Writing a Dockerfile](https://docs.docker.com/get-started/docker-concepts/building-images/writing-a-dockerfile/)
@@ -207,7 +207,9 @@ It should be included in `.gitignore` and provided separately during evaluation 
 
 The Docker data-root directory is created during environment preparation because Docker needs this path before it can store images, containers, and volumes there.  
 The Makefile also checks that the directory exists before launching the project. However, the Makefile does not configure Docker itself; it only prepares the expected folder if needed.  
-**Do not manually delete `/home/<login>/data/docker` while Docker is using it as its data-root**. This directory contains Docker’s internal storage, including images, containers, build cache, and named volumes.
+
+**Do not manually delete `/home/<login>/data/docker` while Docker is using it as its data-root**.  
+This directory contains Docker’s internal storage, including images, containers, build cache, and named volumes.
 
 ---
 
@@ -216,5 +218,5 @@ The Makefile also checks that the directory exists before launching the project.
 On a new terminal, go to `Inception/ root folder` where the Makefile is and execute: `make`.   
 Docker will build the container, mount the volumes and once the process is finished, you should be able to access the website: `https://<username>.42.fr`
 
-* for further User Instructions [CLICK here]  
-* for further Developper Instructions [CLICK here]  
+* for further User Instructions [CLICK here](documents_for_evaluation/USER_DOC.md)  
+* for further Developer Instructions [CLICK here](documents_for_evaluation/DEV_DOC.md)  

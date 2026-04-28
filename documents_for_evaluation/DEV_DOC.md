@@ -13,6 +13,11 @@ The project is a Docker-based infrastructure composed of:
 
 ---
 
+#### *Note*:   
+In any of the commands where the `<login>` or `<username>` is requiered, please remeber to **REPLACE** it with the `your username!`
+
+---
+
 ## ⚙️ Prerequisites
 
 * Debian-based system (Virtual Machine recommended)
@@ -49,11 +54,11 @@ docker info
 sudo docker run hello-world
 ```
 
-🚨🚨 If there is a permissions error in the version or info test:
+🚨 If there is a permissions error in the version or info test: 🚨
 ```bash
 sudo usermod -aG docker $USER
 ```
-**Log out** and **restart** the VM..
+**Log out** and **restart** the VM.
 
 ---
 
@@ -240,6 +245,7 @@ SELECT User, Host, plugin FROM mysql.user;
 ```
 
 To exit MariaDB, type `exit`.
+
 ---
 
 ### WordPress container
@@ -272,7 +278,7 @@ You should see output similar to:
 
 ![docker ps test nginx](pics/nginx_ps_test.png)
 
-This confirms that port 443 is the only exposed port.
+This confirms that `port 443` is the only exposed port.
 
 ### Test website availability
 
