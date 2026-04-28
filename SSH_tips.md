@@ -85,9 +85,9 @@ You want to see something like:
 
 ![docker ps test nginx](pics/nginx_ps_test.png)
 
-Then check nginx logs:
+Then check website availability :
 ```bash
-docker compose logs nginx
+
 curl -k https://mcalciat.42.fr
 curl -k -I https://mcalciat.42.fr
 ```
