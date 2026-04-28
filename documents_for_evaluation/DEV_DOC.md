@@ -39,9 +39,9 @@ sudo systemctl start docker
 sudo systemctl enable docker
 ```
 
-Test Installation
+#### Test Installation
 ```bash
-#  Check version  ---> Docker CLI is installed and working
+# Check version  ---> Docker CLI is installed and working
 docker --version
 # check Docker's info
 docker info
@@ -53,7 +53,7 @@ sudo docker run hello-world
 ```bash
 sudo usermod -aG docker $USER
 ```
-and `restart` the VM.
+**Log out** and **restart** the VM..
 
 ---
 
@@ -88,7 +88,7 @@ sudo systemctl daemon-reload
 sudo systemctl start docker
 ```
 
-Verify:
+Verify configuration::
 
 ```bash
 docker info | grep "Docker Root Dir"
@@ -142,10 +142,10 @@ docker ps
 ```
 You should see:
 
-* nginx
-* wordpress
-* mariadb
-* adminer 
+* NGINX
+* WordPress
+* MariaDB
+* Adminer 
 
 ---
 
@@ -206,17 +206,17 @@ This ensures:
 ## 🔍 Debugging & Verification
 
 
-### View logs
+### Docker Compose logs
 
+In `srcs/`
 ```bash
-cd srcs/
 docker compose -f srcs/docker-compose.yml logs
 ```
 
 ### Check volumes
 
+In `srcs/`
 ```bash
-cd srcs/
 docker volume ls
 # check Mountpoint (Docker data root)
 docker volume inspect mariadb_data
@@ -227,9 +227,9 @@ docker volume inspect wordpress_data
 
 ### MariaDB access
 
+In `srcs/`
 ```bash
 # see logs
-cd srcs/
 docker compose logs mariadb
 # enter mariaDB container (will ask for ROOT password in .env file)
 docker exec -it mariadb mariadb -u root -p
@@ -239,7 +239,7 @@ SELECT User, Host FROM mysql.user;
 SELECT User, Host, plugin FROM mysql.user;
 ```
 
-To exit the container type `exit`.
+To exit MariaDB, type `exit`.
 ---
 
 ### WordPress container
@@ -248,7 +248,7 @@ To exit the container type `exit`.
 # check logs
 cd srcs/
 docker compose logs wordpress
-# sometimes there will be none and it is OK
+# Sometimes there may be no output, which is normal.
 ```
 
 ---
@@ -268,11 +268,11 @@ docker exec -it wordpress getent hosts mariadb
 cd srcs/
 docker compose logs nginx
 ```
-You want to see something like:
+You should see output similar to:  
 
 ![docker ps test nginx](pics/nginx_ps_test.png)
 
-You can check here that port 443 is the only one exposed. 
+This confirms that port 443 is the only exposed port.
 
 ### Test website availability
 
@@ -280,7 +280,7 @@ You can check here that port 443 is the only one exposed.
 curl -k https://<login>.42.fr
 curl -k -I https://<login>.42.fr
 ```
-`REPLACE <login> with the correct username!`
+`REPLACE <login> with the your username!`
 
 Expected result:
 
@@ -307,14 +307,15 @@ Link: <https://<login>.42.fr/index.php?rest_route=/>; rel="https://api.w.org/"
 
 # Changing a service
 
-Let's change the port that is exposed to be able to connect to the domain.
-The real URL will become 
-```
+**Example**: changing the exposed port for the domain.
+
+The URL will become 
+```bash
 https://<login>.42.fr:8443
 ```
 
 1. change port on docker-compose file
-```
+```bash
 #original
 443:443
 #new
@@ -323,8 +324,6 @@ https://<login>.42.fr:8443
 
 2. Update WordPress internal URLs:
 ```bash
-# stop the containers 
-make clean
 #then modify wp URL information
 docker exec -it wordpress \
 wp option update home "https://mcalciat.42.fr:8443" \
@@ -336,7 +335,7 @@ docker exec -it wordpress wp option update siteurl "https://mcalciat.42.fr:8443"
 
 WordPress stores the URL in the database, so when the exposed port changes, I update home and siteurl using wp-cli inside the container.
 
-3. Now do `make` and check that the website now is available on domain 
+3. Now do `make restart` and check that the website now is available on domain 
 ```bash
 https://<login>.42.fr:8443
 ```
@@ -349,15 +348,14 @@ docker exec -it wordpress wp option get siteurl --allow-root --path=/var/www/htm
 
 ## Restore the port
 
-1. `make clean`
-2. revert the changes in docker-compose.yml
-3. Do:
+1. revert the changes in docker-compose.yml
+2. Do:
 ```bash
 docker exec -it wordpress wp option update home "https://mcalciat.42.fr" --allow-root --path=/var/www/html
 docker exec -it wordpress wp option update siteurl "https://mcalciat.42.fr" --allow-root --path=/var/www/html
 ```
 
-Now do `make` and check that the website now is available on its original domain 
+Now do `make restart` and check that the website now is available on its original domain 
 ```bash
 https://<login>.42.fr/
 ```
