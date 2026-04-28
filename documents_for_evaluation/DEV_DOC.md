@@ -305,3 +305,65 @@ Link: <https://<login>.42.fr/index.php?rest_route=/>; rel="https://api.w.org/"
 ---
 
 
+# Changing a service
+
+Let's change the port that is exposed to be able to connect to the domain.
+The real URL will become 
+```
+https://<login>.42.fr:8443
+```
+
+1. change port on docker-compose file
+```
+#original
+443:443
+#new
+8443:443
+```
+
+2. Update WordPress internal URLs:
+```bash
+# stop the containers 
+make clean
+#then modify wp URL information
+docker exec -it wordpress \
+wp option update home "https://mcalciat.42.fr:8443" \
+--allow-root --path=/var/www/html
+
+docker exec -it wordpress wp option update siteurl "https://mcalciat.42.fr:8443" --allow-root --path=/var/www/html
+
+```
+
+WordPress stores the URL in the database, so when the exposed port changes, I update home and siteurl using wp-cli inside the container.
+
+3. Now do `make` and check that the website now is available on domain 
+```bash
+https://<login>.42.fr:8443
+```
+
+Or you can check it via command
+```bash
+docker exec -it wordpress wp option get home --allow-root --path=/var/www/html
+docker exec -it wordpress wp option get siteurl --allow-root --path=/var/www/html
+```
+
+## Restore the port
+
+1. `make clean`
+2. revert the changes in docker-compose.yml
+3. Do:
+```bash
+docker exec -it wordpress wp option update home "https://mcalciat.42.fr" --allow-root --path=/var/www/html
+docker exec -it wordpress wp option update siteurl "https://mcalciat.42.fr" --allow-root --path=/var/www/html
+```
+
+Now do `make` and check that the website now is available on its original domain 
+```bash
+https://<login>.42.fr/
+```
+
+Or you can check it via command
+```bash
+docker exec -it wordpress wp option get home --allow-root --path=/var/www/html
+docker exec -it wordpress wp option get siteurl --allow-root --path=/var/www/html
+```
