@@ -214,9 +214,24 @@ This directory contains Docker’s internal storage, including images, container
 ---
 
 # Instructions
+This is how to start the evaluation: 
 
-On a new terminal, go to `Inception/ root folder` where the Makefile is and execute: `make`.   
+1. Once the VM is up & running, download the project's repository in `home/`.
+2. For security reasons, there is a file containing passwords and key information that was NOT uploaded into the repository (`.env` file ).
+    1. Execute
+```bash
+    cd <Inception_repository>
+    cp /home/mcalciat/ENV_FILE_IS_HERE/.env srcs/.env
+```
+   2. OR do it manually:  
+      1. In Home, go to directory `ENV_FILE_IS_HERE`.  
+      2. Copy the file (you might need to activate the option "show hidden files").  
+      3. Paste it in `Inception_repository/srcs`.  
+3. Open a new terminal for the project's root folder (where the **Makefile** is) and execute: `make`.   
+ 
 Docker will build the container, mount the volumes and once the process is finished, you should be able to access the website: `https://<username>.42.fr`
 
-* for further User Instructions [CLICK here](documents_for_evaluation/USER_DOC.md)  
-* for further Developer Instructions [CLICK here](documents_for_evaluation/DEV_DOC.md)  
+* for further User Instructions [CLICK here](USER_DOC.md)  
+* for further Developer Instructions [CLICK here](DEV_DOC.md)  
+
+---

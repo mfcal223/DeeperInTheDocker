@@ -152,6 +152,8 @@ You should see:
 * MariaDB
 * Adminer 
 
+This also confirms that `port 443` is the only exposed port.
+
 ---
 
 
@@ -215,7 +217,7 @@ This ensures:
 
 In `srcs/`
 ```bash
-docker compose -f srcs/docker-compose.yml logs
+docker compose -f docker-compose.yml logs
 ```
 
 ### Check volumes
@@ -227,6 +229,26 @@ docker volume ls
 docker volume inspect mariadb_data
 docker volume inspect wordpress_data
 ```
+
+
+---
+
+### Ensure containers are built either from the penultimate stable version of Alpine or Debian.
+```bash
+grep -R "^FROM" srcs/requirements
+```
+
+Expected :  
+```bash
+srcs/requirements/mariadb/Dockerfile:FROM debian:bookworm
+srcs/requirements/wordpress/Dockerfile:FROM debian:bookworm
+srcs/requirements/nginx/Dockerfile:FROM debian:bookworm
+srcs/requirements/bonus/adminer/Dockerfile:FROM debian:bookworm
+```
+
+Project is using Debian Bookworm (12), not the latest version. 
+
+All containers are built from Debian Bookworm, which is the current stable Debian release. I explicitly specify the version in the Dockerfiles instead of using latest, to ensure reproducibility and compliance with the subject requirements.
 
 ---
 
@@ -250,9 +272,9 @@ To exit MariaDB, type `exit`.
 
 ### WordPress container
 
+In `srcs/`
 ```bash
 # check logs
-cd srcs/
 docker compose logs wordpress
 # Sometimes there may be no output, which is normal.
 ```
@@ -261,37 +283,45 @@ docker compose logs wordpress
 
 ### Network test
 
+In `srcs/`
 ```bash
 # test if WP can resolve the MariaDB container name
 docker exec -it wordpress getent hosts mariadb
+```
+
+Expected output:  
+```bash
+xxx.xx.x.x      mariadb
 ```
 
 ---
 
 ### NGINX
 
+In `srcs/`
 ```bash
-cd srcs/
 docker compose logs nginx
 ```
 You should see output similar to:  
 
 ![docker ps test nginx](pics/nginx_ps_test.png)
 
-This confirms that `port 443` is the only exposed port.
+
 
 ### Test website availability
 
 ```bash
+# extense message
 curl -k https://<login>.42.fr
+# shorter message
 curl -k -I https://<login>.42.fr
 ```
-`REPLACE <login> with the your username!`
+
+> `REPLACE <login> with the your username!`
+(If you see a **"-bash: login: No such file or directory"** message, check that you have replace it correctly)
+
 
 Expected result:
-
-* HTTP response (200 OK or redirect)
-
 ```
 HTTP/1.1 200 OK
 Server: nginx/1.22.1
@@ -299,6 +329,11 @@ Date: Tue, 28 Apr 2026 09:41:33 GMT
 Content-Type: text/html; charset=UTF-8
 Connection: keep-alive
 Link: <https://<login>.42.fr/index.php?rest_route=/>; rel="https://api.w.org/"
+```
+## Ensure that a SSL/TLS certificate is used
+```bash
+openssl s_client -connect username.42.fr:443 -tls1_2
+openssl s_client -connect username.42.fr:443 -tls1_3
 ```
 ---
 
@@ -341,7 +376,9 @@ docker exec -it wordpress wp option update siteurl "https://mcalciat.42.fr:8443"
 
 WordPress stores the URL in the database, so when the exposed port changes, I update home and siteurl using wp-cli inside the container.
 
-3. Now do `make restart` and check that the website now is available on domain 
+3. Now, go up to root directory and do `make restart`. 
+  
+4. Check that the website now is available on domain 
 ```bash
 https://<login>.42.fr:8443
 ```
@@ -349,6 +386,7 @@ https://<login>.42.fr:8443
 Or you can check it via command
 ```bash
 docker exec -it wordpress wp option get home --allow-root --path=/var/www/html
+
 docker exec -it wordpress wp option get siteurl --allow-root --path=/var/www/html
 ```
 
@@ -358,7 +396,6 @@ docker exec -it wordpress wp option get siteurl --allow-root --path=/var/www/htm
 2. Do:
 ```bash
 docker exec -it wordpress wp option update home "https://mcalciat.42.fr" --allow-root --path=/var/www/html
-docker exec -it wordpress wp option update siteurl "https://mcalciat.42.fr" --allow-root --path=/var/www/html
 ```
 
 Now do `make restart` and check that the website now is available on its original domain 

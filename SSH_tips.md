@@ -176,24 +176,22 @@ sudo systemctl status ssh
 ```
 
 ---
-
-
-
 MYSQL_DATABASE=wordpress
 MYSQL_USER=wpuser
 MYSQL_PASSWORD=wp_pass_42
 MYSQL_ROOT_PASSWORD=root_pass_42
 
-MYSQL_VOLUME=/home/mcalciat/data/mysql
-WP_VOLUME=/home/mcalciat/data/wordpress
+
 DOMAIN_NAME=mcalciat.42.fr
 
 WP_TITLE=Inception WordPress
 
 WP_ADMIN_USER=guildMaster
-WP_ADMIN_PASSWORD=1234shouldnotbeapassword
+WP_ADMIN_PASSWORD=1234password
 WP_ADMIN_EMAIL=guildmaster@example.com
 
 WP_USER=normal_user
 WP_USER_PASSWORD=myn0rm4lp4ss
 WP_USER_EMAIL=just_one_user@example.com
+ 
+asd

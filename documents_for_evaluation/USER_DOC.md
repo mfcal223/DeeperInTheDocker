@@ -14,7 +14,12 @@ All services run automatically inside Docker containers and communicate internal
 ---
 
 #### *Note*:   
-In any of the commands where the `<login>` or `<username>` is requiered, please remeber to **REPLACE** it with the `your username!`
+In any of the commands where the `<login>` or `<username>` is requiered, please remeber to **REPLACE** it with the `defined username!`.
+
+The defined username appears in the `.env` file, as part of the domain.  
+```bash
+DOMAIN_NAME=<username>.42.fr
+```
 
 ---
 
@@ -80,12 +85,6 @@ Open a browser and go to:
 
 ```text
 https://<login>.42.fr
-```
-
-Example:
-
-```text
-https://mcalciat.42.fr
 ```
 
 The WordPress “Hello World” website should appear. 
