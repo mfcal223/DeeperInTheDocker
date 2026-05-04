@@ -1,0 +1,65 @@
+services:
+  mariadb:
+    container_name: mariadb
+    build: ./requirements/mariadb
+    image: mariadb
+    env_file:
+      - .env
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - inception
+    restart: always
+
+  wordpress:
+    container_name: wordpress
+    build: ./requirements/wordpress
+    image: wordpress
+    env_file:
+      - .env
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      - mariadb
+    networks:
+      - inception
+    restart: always
+
+  adminer:
+    container_name: adminer
+    build: ./requirements/bonus/adminer
+    image: adminer
+    env_file:
+      - .env
+    depends_on:
+      - mariadb
+    networks:
+      - inception
+    restart: always
+
+  nginx:
+    container_name: nginx
+    build: ./requirements/nginx
+    image: nginx
+    env_file:
+      - .env
+    ports:
+      - "443:443"
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      - wordpress
+      - adminer
+    networks:
+      - inception
+    restart: always
+
+volumes:
+  mariadb_data:
+    name: mariadb_data
+  wordpress_data:
+    name: wordpress_data
+
+networks:
+  inception:
+    driver: bridge
